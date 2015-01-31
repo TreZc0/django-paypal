@@ -4,8 +4,7 @@ from django.conf import settings
 class PayPalSettingsError(Exception):
     """Raised when settings be bad."""
 
-
-RECEIVER_EMAIL = settings.PAYPAL_RECEIVER_EMAIL
+RECEIVER_EMAIL = getattr(settings, 'PAYPAL_RECEIVER_EMAIL', None)
 
 
 # API Endpoints.

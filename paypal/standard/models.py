@@ -313,7 +313,7 @@ class PayPalStandardBase(Model):
         if code is not None:
             self.flag_code = code
 
-    def verify(self, item_check_callable=None):
+    def verify(self, item_check_callable=None, receiver_email=RECEIVER_EMAIL):
         """
         Verifies an IPN and a PDT.
         Checks for obvious signs of weirdness in the payment and flags appropriately.
@@ -332,7 +332,7 @@ class PayPalStandardBase(Model):
                     self.set_flag("Invalid payment_status. (%s)" % self.payment_status)
                 if duplicate_txn_id(self):
                     self.set_flag("Duplicate txn_id. (%s)" % self.txn_id)
-                if self.receiver_email != settings.PAYPAL_RECEIVER_EMAIL:
+                if self.receiver_email.lower() != receiver_email.lower():
                     self.set_flag("Invalid receiver_email. (%s)" % self.receiver_email)
                 if callable(item_check_callable):
                     flag, reason = item_check_callable(self)
