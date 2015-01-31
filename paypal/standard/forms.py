@@ -120,7 +120,7 @@ class PayPalPaymentsForm(forms.Form):
     t3 = forms.CharField(widget=ValueHiddenInput())  # Subscription unit of Duration, default to Month
     src = forms.CharField(widget=ValueHiddenInput()) # Is billing recurring? default to yes
     sra = forms.CharField(widget=ValueHiddenInput()) # Reattempt billing on failed cc transaction
-    no_note = forms.CharField(widget=ValueHiddenInput(), choices=NO_NOTE_CHOICES, initial=NO_NOTE_CHOICES[0][0])
+    no_note = forms.CharField(widget=ValueHiddenInput(), initial=NO_NOTE_CHOICES[0][0])
     # Can be either 1 or 2. 1 = modify or allow new subscription creation, 2 = modify only
     modify = forms.IntegerField(widget=ValueHiddenInput()) # Are we modifying an existing subscription?
 
@@ -137,7 +137,7 @@ class PayPalPaymentsForm(forms.Form):
     invoice = forms.CharField(widget=ValueHiddenInput())
 
     # Default fields.
-    cmd = forms.ChoiceField(widget=forms.HiddenInput(), choices=CMD_CHOICES, initial=CMD_CHOICES[0][0])
+    cmd = forms.ChoiceField(widget=forms.HiddenInput(), initial=CMD_CHOICES[0][0])
     charset = forms.CharField(widget=forms.HiddenInput(), initial="utf-8")
     currency_code = forms.CharField(widget=forms.HiddenInput(), initial="USD")
     no_shipping = forms.ChoiceField(widget=forms.HiddenInput(), choices=SHIPPING_CHOICES,
