@@ -330,9 +330,7 @@ class PayPalStandardBase(Model):
             if self.is_transaction():
                 if self.payment_status not in self.PAYMENT_STATUS_CHOICES:
                     self.set_flag("Invalid payment_status. (%s)" % self.payment_status)
-                if duplicate_txn_id(self):
-                    self.set_flag("Duplicate txn_id. (%s)" % self.txn_id)
-                if self.business.lower() != business.lower():
+                if (self.business and self.business.lower() != business.lower()) or (not self.business and self.receiver_email.lower() != business.lower()):
                     self.set_flag("Business email mismatch. (%s)" % self.business)
                 if callable(item_check_callable):
                     flag, reason = item_check_callable(self)
