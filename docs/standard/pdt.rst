@@ -13,7 +13,9 @@ django-paypal is not as well supported as IPN.
 
 To use PDT:
 
-1. Edit `settings.py` and add  `paypal.standard.pdt` to your `INSTALLED_APPS`. Also set `PAYPAL_IDENTITY_TOKEN` - you can find the correct value of this setting from the PayPal website:
+1. Edit ``settings.py`` and add ``paypal.standard.pdt`` to your
+   ``INSTALLED_APPS``. Also set ``PAYPAL_IDENTITY_TOKEN`` - you can find the
+   correct value of this setting from the PayPal website:
 
    settings.py:
 
@@ -37,7 +39,7 @@ To use PDT:
 
 2. :doc:`/updatedb`
 
-3. Create a view that uses `PayPalPaymentsForm` just like in :doc:`ipn`.
+3. Create a view that uses ``PayPalPaymentsForm`` just like in :doc:`ipn`.
 
 4. After someone uses this button to buy something PayPal will return the user
    to your site at your ``return_url`` with some extra GET parameters.
@@ -59,21 +61,29 @@ To use PDT:
        ]
 
 
-    And then create a view that uses the ``process_pdt`` helper function:
+   And then create a view that uses the ``process_pdt`` helper function:
 
-    .. code-block:: python
+   .. code-block:: python
 
-        @require_GET
-        def your_pdt_return_url_view(request):
-            pdt_obj, failed = process_pdt(request, item_check_callable=None)
-            context = {"failed": failed, "pdt_obj": pdt_obj}
-            if not failed:
-                # IMPORTANT! :
-                # We should still check that the receiver_email is the expected one
-                if pdt_obj.receiver_email != 'my_account_email@example.com':
-                    # Do whatever action you expect
-                    return render(request, 'my_valid_payment_template', context)
-            return render(request, 'my_non_valid_payment_template', context)
+       @require_GET
+       def your_pdt_return_url_view(request):
+           pdt_obj, failed = process_pdt(request)
+           context = {"failed": failed, "pdt_obj": pdt_obj}
+           if not failed:
+
+               # WARNING!
+               # Check that the receiver email is the same we previously
+               # set on the business field request. (The user could tamper
+               # with those fields on payment form before send it to PayPal)
+
+               if pdt_obj.receiver_email == "receiver_email@example.com":
+
+                   # ALSO: for the same reason, you need to check the amount
+                   # received etc. are all what you expect.
+
+                   # Do whatever action is needed, then:
+                   return render(request, 'my_valid_payment_template', context)
+           return render(request, 'my_non_valid_payment_template', context)
 
    See the :doc:`variables` documentation for information about attributes on
    the PDT object that you can use.

@@ -6,10 +6,11 @@ import warnings
 from datetime import datetime
 from decimal import Decimal
 
+from django.conf import settings
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
-from six import b, text_type
+from six import text_type
 from six.moves.urllib.parse import urlencode
 
 from paypal.standard.ipn.models import PayPalIPN
@@ -17,6 +18,7 @@ from paypal.standard.ipn.signals import (
     invalid_ipn_received, payment_was_flagged, payment_was_refunded, payment_was_reversed, payment_was_successful,
     recurring_cancel, recurring_create, recurring_failed, recurring_payment, recurring_skipped, valid_ipn_received
 )
+from paypal.standard.ipn.views import CONTENT_TYPE_ERROR
 from paypal.standard.models import ST_PP_CANCELLED
 
 # Parameters are all bytestrings, so we can construct a bytestring
@@ -41,7 +43,7 @@ IPN_POST_PARAMS = {
     "payment_date": b"23:04:06 Feb 02, 2009 PST",
     "first_name": b"J\xF6rg",
     "item_name": b"",
-    "charset": b(CHARSET),
+    "charset": CHARSET.encode('ascii'),
     "custom": b"website_id=13&user_id=21",
     "notify_version": b"2.6",
     "transaction_subject": b"",
@@ -179,11 +181,23 @@ class IPNTest(MockedPostbackMixin, IPNUtilsMixin, TestCase):
         self.assertEqual(ipn_obj.first_name, u"J\u00f6rg")
         # Check date parsing
         self.assertEqual(ipn_obj.payment_date,
-                         datetime(2009, 2, 3, 7, 4, 6, tzinfo=timezone.utc))
+                         datetime(2009, 2, 3, 7, 4, 6,
+                                  tzinfo=timezone.utc if settings.USE_TZ else None))
 
     def test_invalid_ipn_received(self):
         PayPalIPN._postback = lambda self: b"INVALID"
         self.assertGotSignal(invalid_ipn_received, True)
+
+    def test_reverify_ipn(self):
+        PayPalIPN._postback = lambda self: b"Internal Server Error"
+        self.paypal_post(IPN_POST_PARAMS)
+        ipn_obj = PayPalIPN.objects.all()[0]
+        self.assertEqual(ipn_obj.flag, True)
+        PayPalIPN._postback = lambda self: b"VERIFIED"
+        ipn_obj.verify()
+        self.assertEqual(ipn_obj.flag, False)
+        self.assertEqual(ipn_obj.flag_info, "")
+        self.assertEqual(ipn_obj.flag_code, "")
 
     def test_payment_was_successful(self):
         self.assertGotSignal(payment_was_successful, False, deprecated=True)
@@ -247,6 +261,16 @@ class IPNTest(MockedPostbackMixin, IPNUtilsMixin, TestCase):
         ipn_obj = PayPalIPN.objects.order_by('-created_at', '-pk')[0]
         self.assertEqual(ipn_obj.flag, True)
         self.assertEqual(ipn_obj.flag_info, "Duplicate txn_id. (51403485VH153354B)")
+
+    def test_duplicate_txn_id_with_first_flagged(self):
+        PayPalIPN._postback = lambda self: b"Internal Server Error"
+        self.paypal_post(IPN_POST_PARAMS)
+        PayPalIPN._postback = lambda self: b"VERIFIED"
+        self.paypal_post(IPN_POST_PARAMS)
+        self.assertEqual(len(PayPalIPN.objects.all()), 2)
+        ipn_objs = PayPalIPN.objects.order_by('created_at', 'pk')
+        self.assertEqual(ipn_objs[0].flag, True)
+        self.assertEqual(ipn_objs[1].flag, False)
 
     def test_recurring_payment_skipped_ipn(self):
         update = {
@@ -369,14 +393,14 @@ class IPNTest(MockedPostbackMixin, IPNUtilsMixin, TestCase):
 
     def test_paypal_date_format(self):
         update = {
-            "next_payment_date": b("23:04:06 Feb 02, 2009 PST"),
-            "subscr_date": b("23:04:06 Jan 02, 2009 PST"),
-            "subscr_effective": b("23:04:06 Jan 02, 2009 PST"),
-            "auction_closing_date": b("23:04:06 Jan 02, 2009 PST"),
-            "retry_at": b("23:04:06 Jan 02, 2009 PST"),
+            "next_payment_date": b"23:04:06 Feb 02, 2009 PST",
+            "subscr_date": b"23:04:06 Jan 02, 2009 PST",
+            "subscr_effective": b"23:04:06 Jan 02, 2009 PST",
+            "auction_closing_date": b"23:04:06 Jan 02, 2009 PST",
+            "retry_at": b"23:04:06 Jan 02, 2009 PST",
             # test parsing times in PST/PDT change period
-            "case_creation_date": b("01:13:05 Nov 01, 2015 PST"),
-            "time_created": b("01:13:05 Nov 01, 2015 PDT"),
+            "case_creation_date": b"01:13:05 Nov 01, 2015 PST",
+            "time_created": b"01:13:05 Nov 01, 2015 PDT",
         }
 
         params = IPN_POST_PARAMS.copy()
@@ -384,6 +408,90 @@ class IPNTest(MockedPostbackMixin, IPNUtilsMixin, TestCase):
 
         self.paypal_post(params)
         self.assertFalse(PayPalIPN.objects.get().flag)
+
+    def test_paypal_date_invalid_format(self):
+        params = IPN_POST_PARAMS.copy()
+        params.update({"time_created": b"2015-10-25 01:21:32"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertIn(
+            PayPalIPN.objects.latest('id').flag_info,
+            ['Invalid form. (time_created: Invalid date format '
+             '2015-10-25 01:21:32: need more than 2 values to unpack)',
+             'Invalid form. (time_created: Invalid date format '
+             '2015-10-25 01:21:32: not enough values to unpack '
+             '(expected 5, got 2))'
+             ]
+        )
+
+        # day not int convertible
+        params = IPN_POST_PARAMS.copy()
+        params.update({"payment_date": b"01:21:32 Jan 25th 2015 PDT"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertEqual(
+            PayPalIPN.objects.latest('id').flag_info,
+            "Invalid form. (payment_date: Invalid date format "
+            "01:21:32 Jan 25th 2015 PDT: invalid literal for int() with "
+            "base 10: '25th')"
+        )
+
+        # month not in Mmm format
+        params = IPN_POST_PARAMS.copy()
+        params.update({"next_payment_date": b"01:21:32 01 25 2015 PDT"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertIn(
+            PayPalIPN.objects.latest('id').flag_info,
+            ["Invalid form. (next_payment_date: Invalid date format "
+             "01:21:32 01 25 2015 PDT: u'01' is not in list)",
+             "Invalid form. (next_payment_date: Invalid date format "
+             "01:21:32 01 25 2015 PDT: '01' is not in list)"]
+        )
+
+        # month not in Mmm format
+        params = IPN_POST_PARAMS.copy()
+        params.update({"retry_at": b"01:21:32 January 25 2015 PDT"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertIn(
+            PayPalIPN.objects.latest('id').flag_info,
+            ["Invalid form. (retry_at: Invalid date format "
+             "01:21:32 January 25 2015 PDT: u'January' is not in list)",
+             "Invalid form. (retry_at: Invalid date format "
+             "01:21:32 January 25 2015 PDT: 'January' is not in list)"]
+        )
+
+        # no seconds in time part
+        params = IPN_POST_PARAMS.copy()
+        params.update({"subscr_date": b"01:28 Jan 25 2015 PDT"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertIn(
+            PayPalIPN.objects.latest('id').flag_info,
+            ["Invalid form. (subscr_date: Invalid date format "
+             "01:28 Jan 25 2015 PDT: need more than 2 values to unpack)",
+             "Invalid form. (subscr_date: Invalid date format "
+             "01:28 Jan 25 2015 PDT: not enough values to unpack "
+             "(expected 3, got 2))"]
+        )
+
+        # string not valid datetime
+        params = IPN_POST_PARAMS.copy()
+        params.update({"case_creation_date": b"01:21:32 Jan 49 2015 PDT"})
+        self.paypal_post(params)
+        self.assertTrue(PayPalIPN.objects.latest('id').flag)
+        self.assertEqual(
+            PayPalIPN.objects.latest('id').flag_info,
+            "Invalid form. (case_creation_date: Invalid date format "
+            "01:21:32 Jan 49 2015 PDT: day is out of range for month)"
+        )
+
+    def test_content_type_validation(self):
+        with self.assertRaises(AssertionError) as assert_context:
+            self.client.post("/ipn/", {}, content_type='application/json')
+        self.assertIn(CONTENT_TYPE_ERROR, repr(assert_context.exception)),
+        self.assertFalse(PayPalIPN.objects.exists())
 
 
 @override_settings(ROOT_URLCONF='paypal.standard.ipn.tests.test_urls')
@@ -407,7 +515,8 @@ class IPNLocaleTest(IPNUtilsMixin, MockedPostbackMixin, TestCase):
         self.assertEqual(ipn_obj.last_name, u"User")
         # Check date parsing
         self.assertEqual(ipn_obj.payment_date,
-                         datetime(2009, 2, 3, 7, 4, 6, tzinfo=timezone.utc))
+                         datetime(2009, 2, 3, 7, 4, 6,
+                                  tzinfo=timezone.utc if settings.USE_TZ else None))
 
 
 @override_settings(ROOT_URLCONF='paypal.standard.ipn.tests.test_urls')
@@ -454,7 +563,8 @@ class IPNSimulatorTests(TestCase):
         self.assertFalse(ipn.flag)
         self.assertEqual(ipn.mc_gross, Decimal("12.34"))
         # For tests, we get conversion to UTC because this is all SQLite supports.
-        self.assertEqual(ipn.payment_date, datetime(2009, 2, 3, 7, 4, 6, tzinfo=timezone.UTC()))
+        self.assertEqual(ipn.payment_date, datetime(2009, 2, 3, 7, 4, 6,
+                                                    tzinfo=timezone.utc if settings.USE_TZ else None))
 
     def test_declined(self):
         paypal_input = b'payment_type=instant&payment_date=23%3A04%3A06%20Feb%2002%2C%202009%20PDT&' \

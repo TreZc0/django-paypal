@@ -14,7 +14,7 @@ DOCS_URL = 'https://django-paypal.readthedocs.org'
 
 setup(
     name='django-paypal',
-    version="0.3.dev",
+    version="0.5.0",
     author='John Boxall',
     author_email='john@handimobility.ca',
     maintainer="Luke Plant",
@@ -24,6 +24,7 @@ setup(
         'Django>=1.6',
         'six>=1.4.1',
         'requests>=2.5.3',
+        'pytz>=2015.4',
     ],
     description=DESCRIPTION,
     long_description="%s\n\nHome page: %s\n\nDocs: %s\n" % (DESCRIPTION, URL, DOCS_URL),
@@ -36,7 +37,7 @@ setup(
         "Operating System :: OS Independent",
         "Topic :: Software Development",
         "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.3",
         "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
     ],
 )

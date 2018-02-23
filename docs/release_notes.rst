@@ -2,9 +2,94 @@
  Release notes
 ===============
 
+Version 0.5.0 - under development
+---------------------------------
 
-Version 0.3.0 (in development)
-------------------------------
+* Dropped official support for Python 3.3
+
+
+Version 0.5.0
+-------------
+
+* Tidy up and update PayPalPaymentsForm. Specifically:
+
+  * Where possible, remove explicit fields, leaving them to be handled by
+    __init__(), which creates fields as required from the contents of ``initial``.
+
+  * Deprecate field return_url - use field return instead. PayPal expects field
+    ``return``, but Python's return keyword meant it wasn't possible to set that field in
+    the class's definition. Later, code in __init__ was added to handle any value in ``initial``, in
+    particular ``initial['return']``. As the work around which renamed 'return' to 'return_url'
+    is not necessary, it is now being deprecated. To maintain backwards compatability
+    initial['return_url'] is remapped to initial['return'], with a deprecation warning.
+
+  * Add cmd choices for _xclick-auto-billing and _xclick-payment-plan.
+
+Version 0.4.1
+-------------
+
+* Added forgotten docs file
+
+Version 0.4.0
+-------------
+
+* Cleaned up and documented all settings related to button images. Specifically:
+
+  * The default images have been updated to recent ones. This is backwards
+    incompatible if you were relying on the previous (very old) image and had
+    not set ``PAYPAL_IMAGE`` in your settings.
+
+  * Removed separate settings for sandbox mode - these only meant more work when
+    configuring, and production looked different from sandbox by default. This
+    is backwards incompatible, but only affects development mode.
+
+  * Names of settings made clearer. The new names are:
+
+    * ``PAYPAL_BUY_BUTTON_IMAGE`` (was: ``PAYPAL_IMAGE``)
+    * ``PAYPAL_DONATION_BUTTON_IMAGE`` (was: ``PAYPAL_DONATION_IMAGE``)
+    * ``PAYPAL_SUBSCRIPTION_BUTTON_IMAGE`` (was: ``PAYPAL_SUBSCRIPTION_IMAGE``)
+
+
+Version 0.3.6
+-------------
+
+* Version bump due to messed up version numbers in previous release.
+
+Version 0.3.4
+-------------
+
+* Use multi certificates with PaypalEncryptedPaymentsForm
+* Fixed issue #166 - regression from 0.2.7 when using ``USE_TZ=False``
+* Django 1.11 compatibility.
+* Added warnings for untested code.
+
+Version 0.3.3
+-------------
+
+* Fixed issue #147 - compatibility with Django 1.10
+
+Version 0.3.2
+-------------
+
+* Fixed ``verify`` method of IPN/PDT so that it can be re-run in the case
+  of a PayPal server error.
+* Added 're-verify' admin action for IPNs.
+* Other IPN admin improvements.
+* *IMPORTANT:* Removed the undocumented and untested ``item_check_callable``
+  parameter from several IPN and PDT processing functions. You should
+  implement checks in signal handlers like ``valid_ipn_received`` or
+  other calling code.
+* Fixed issue #119 - flagged IPNs not excluded from duplicate checking.
+* Fixed issue #126 - documented need to check amount received.
+
+Version 0.3.1
+-------------
+
+* Better handling of unknown datetime formats, thanks rebwok, PR #137
+* Added pytz dependency
+
+Version 0.3
+-----------
 
 * Dropped support for Django 1.4 and 1.5.
 * Fixed crasher with AmbiguousTimeError.
