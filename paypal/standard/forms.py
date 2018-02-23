@@ -82,15 +82,12 @@ class PayPalPaymentsForm(forms.Form):
     """
     Creates a PayPal Payments Standard "Buy It Now" button, configured for a
     selling a single item with no shipping.
-
     For a full overview of all the fields you can set (there is a lot!) see:
     http://tinyurl.com/pps-integration
-
     Usage:
     >>> f = PayPalPaymentsForm(initial={'item_name':'Widget 001', ...})
     >>> f.render()
     u'<form action="https://www.paypal.com/cgi-bin/webscr" method="post"> ...'
-
     """
     CMD_CHOICES = (
         ("_xclick", "Buy now or Donations"),
@@ -132,7 +129,7 @@ class PayPalPaymentsForm(forms.Form):
             for k, v in kwargs['initial'].items():
                 if k not in self.base_fields:
                     self.fields[k] = forms.CharField(label=k, widget=ValueHiddenInput(), initial=v)
-        # Allow test mode to be set per-form, rather than require it to be global
+       # Allow test mode to be set per-form, rather than require it to be global
         self.sandbox = sandbox if sandbox != None else getattr(settings, 'PAYPAL_TEST', True)
  
     def _fix_deprecated_paypal_receiver_email(self, initial_args):
@@ -153,7 +150,7 @@ class PayPalPaymentsForm(forms.Form):
         return initial_args
 
     def test_mode(self):
-        return self.sandbox
+       return self.sandbox
 
     def get_endpoint(self):
         "Returns the endpoint url for the form."
@@ -199,10 +196,8 @@ class PayPalEncryptedPaymentsForm(PayPalPaymentsForm):
     """
     Creates a PayPal Encrypted Payments "Buy It Now" button.
     Requires the M2Crypto package.
-
     Based on example at:
     http://blog.mauveweb.co.uk/2007/10/10/paypal-with-django/
-
     """
 
     def __init__(self, private_cert=PAYPAL_PRIVATE_CERT, public_cert=PAYPAL_PUBLIC_CERT,
@@ -259,9 +254,7 @@ class PayPalSharedSecretEncryptedPaymentsForm(PayPalEncryptedPaymentsForm):
     """
     Creates a PayPal Encrypted Payments "Buy It Now" button with a Shared Secret.
     Shared secrets should only be used when your IPN endpoint is on HTTPS.
-
     Adds a secret to the notify_url based on the contents of the form.
-
     """
 
     def __init__(self, *args, **kwargs):
